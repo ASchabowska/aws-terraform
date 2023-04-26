@@ -90,3 +90,167 @@ resource "aws_vpc_endpoint" "event_bridge" {
     Environment = "event bridge endpoint"
   }
 }
+
+
+resource "aws_security_group" "lambda_group" {
+  name_prefix = "lambda-sg"
+  vpc_id = aws_vpc.main.id
+ 
+  ingress {
+    from_port = 0
+    to_port = 65535
+    protocol = "tcp"
+    cidr_blocks = ["10.0.2.0/24"]
+  }
+ 
+  egress {
+    from_port = 0
+    to_port = 65535
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+data "aws_iam_policy" "lambda_basic_execution_role_policy" {
+  name = "AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role" "lambda_event_iam_role" {
+  name_prefix         = "EventBridgeLambdaRole-"
+  managed_policy_arns = [data.aws_iam_policy.lambda_basic_execution_role_policy.arn]
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+	{
+	  "Action": "sts:AssumeRole",
+	  "Principal": {
+		"Service": "lambda.amazonaws.com"
+	  },
+	  "Effect": "Allow",
+	  "Sid": ""
+	}
+  ]
+}
+EOF
+}
+
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+
+    actions = ["sts:AssumeRole"]
+  }
+}
+
+resource "aws_iam_role" "iam_for_lambda" {
+  name               = "iam_for_lambda"
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+}
+
+resource "aws_lambda_function" "lambda_function1" {
+   function_name    = "lambda1"
+   role             = aws_iam_role.iam_for_lambda.arn
+   filename         = "../file1"
+   handler          = "index.lambda_handler"
+   runtime          = "python3.8"
+
+   vpc_config {
+       subnet_ids = [aws_subnet.public_subnet.id]
+       security_group_ids = [aws_security_group.lambda_group.id]
+   }
+ }
+
+ resource "aws_lambda_function" "lambda_function2" {
+   function_name    = "lambda2"
+   role             = aws_iam_role.lambda_event_iam_role.arn
+   filename         = "../file2"
+   handler          = "index.lambda_handler"
+   runtime          = "python3.8"
+
+   vpc_config {
+       subnet_ids = [aws_subnet.public_subnet.id]
+       security_group_ids = [aws_security_group.lambda_group.id]
+   }
+ }
+
+ module "secrets-manager" {
+
+  source = "lgallard/secrets-manager/aws"
+
+  secrets = {
+    secret-1 = {
+      description             = "My secret 1"
+      recovery_window_in_days = 7
+      secret_string           = "This is an example"
+    },
+    secret-2 = {
+      description             = "My secret 2"
+      recovery_window_in_days = 7
+      secret_string           = "This is another example"
+    }
+  }
+
+  tags = {
+    Owner       = "DevOps team"
+    Environment = "dev"
+    Terraform   = true
+
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "event_rule" {
+	name_prefix = "eventbridge-lambda-"
+  event_pattern = <<EOF
+{
+  "detail-type": ["transaction"],
+  "source": ["custom.myApp"],
+  "detail": {
+	"location": [{
+	  "prefix": "EUR-"
+	}]
+  }
+}
+EOF
+}
+
+resource "aws_cloudwatch_event_target" "target_lambda_function" {
+  rule = aws_cloudwatch_event_rule.event_rule.name
+  arn  = aws_lambda_function.lambda_function2.arn
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda_function2.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.event_rule.arn
+}
+
+module "eventbridge" {
+  source = "terraform-aws-modules/eventbridge/aws"
+
+  create_bus = false
+
+  rules = {
+    crons = {
+      description         = "Trigger for a Lambda"
+      schedule_expression = "rate(5 minutes)"
+    }
+  }
+
+  targets = {
+    crons = [
+      {
+        name  = "lambda-event"
+        arn   = "arn:aws:lambda:ap-southeast-1:135367859851:function:resolved-penguin-lambda"
+        input = jsonencode({"job": "cron-by-rate"})
+      }
+    ]
+  }
+}
