@@ -13,6 +13,8 @@ provider "aws" {
   region  = "us-west-2"
 }
 
+# VPC, subnets, gateways
+
 resource "aws_vpc" "main" { 
     cidr_block       = "10.0.0.0/16"   
     instance_tenancy = "default"   
@@ -64,6 +66,8 @@ resource "aws_nat_gateway" "public_nat_gateway" {
   depends_on = [aws_internet_gateway.gateway]
 }
 
+# VPC endpoints
+
 resource "aws_vpc_endpoint" "ssm" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.us-west-2.ssm"
@@ -91,6 +95,7 @@ resource "aws_vpc_endpoint" "event_bridge" {
   }
 }
 
+# LAMBDAS
 
 resource "aws_security_group" "lambda_group" {
   name_prefix = "lambda-sg"
@@ -180,6 +185,8 @@ resource "aws_lambda_function" "lambda_function1" {
    }
  }
 
+# SECRET MANAGER
+
  module "secrets-manager" {
 
   source = "lgallard/secrets-manager/aws"
@@ -204,6 +211,8 @@ resource "aws_lambda_function" "lambda_function1" {
 
   }
 }
+
+# EVENT BRIDGE
 
 resource "aws_cloudwatch_event_rule" "event_rule" {
 	name_prefix = "eventbridge-lambda-"
@@ -252,5 +261,35 @@ module "eventbridge" {
         input = jsonencode({"job": "cron-by-rate"})
       }
     ]
+  }
+}
+
+# SYSTEM MANAGER
+module "ssm" {
+  source = "../../"
+
+  name = "system-manager"
+
+  operating_system                     = "AMAZON_LINUX_2"
+  approved_patches_compliance_level    = "CRITICAL"
+  approved_patches_enable_non_security = false
+
+  approval_rules = [{
+    approve_after_days  = 7
+    compliance_level    = "CRITICAL"
+    enable_non_security = false
+    patch_filters = [
+      { key = "PRODUCT", values = ["AmazonLinux2"] },
+      { key = "CLASSIFICATION", values = ["Security", "Bugfix"] },
+      { key = "SEVERITY", values = ["Critical", "Important"] }
+    ]
+  }]
+
+  maintenance_window = {
+    enabled           = true
+    schedule          = "cron(0 9 */7 * ?)"
+    schedule_timezone = "UTC"
+    cutoff            = 0
+    duration          = 1
   }
 }
