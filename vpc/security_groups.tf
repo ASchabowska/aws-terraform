@@ -7,7 +7,6 @@ resource "aws_security_group" "eventbridge_sg" {
   # TO DO: change to eventbridge cidr
   cidr_blocks      = ["0.0.0.0/0"]
 }
-
   egress {
     from_port        = 0
     to_port          = 0

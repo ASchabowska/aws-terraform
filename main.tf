@@ -17,3 +17,7 @@ module "vpc" {
   source = "./vpc"
   aws_region = var.aws_region
 }
+
+module "lambda" {
+  source = "./lambda"
+}

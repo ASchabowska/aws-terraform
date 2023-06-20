@@ -1,42 +1,47 @@
-data "aws_iam_policy" "lambda_basic_execution_role_policy" {
-  name = "AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role" "lambda_event_iam_role" {
-  name_prefix         = "EventBridgeLambdaRole-"
-  managed_policy_arns = [data.aws_iam_policy.lambda_basic_execution_role_policy.arn]
-
-  assume_role_policy = <<EOF
+resource "aws_iam_role" "lambda_role" {
+ name   = "aws_lambda_role"
+ assume_role_policy = <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
-	{
-	  "Action": "sts:AssumeRole",
-	  "Principal": {
-		"Service": "lambda.amazonaws.com"
-	  },
-	  "Effect": "Allow",
-	  "Sid": ""
-	}
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
   ]
 }
 EOF
 }
 
-data "aws_iam_policy_document" "assume_role" {
-  statement {
-    effect = "Allow"
+# IAM policy for logging from a lambda
+resource "aws_iam_policy" "iam_policy_for_lambda" {
 
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com"]
+  name         = "aws_iam_policy_for_aws_lambda_role"
+  path         = "/"
+  description  = "AWS IAM Policy for managing aws lambda role"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*",
+      "Effect": "Allow"
     }
-
-    actions = ["sts:AssumeRole"]
-  }
+  ]
+}
+EOF
 }
 
-resource "aws_iam_role" "iam_for_lambda" {
-  name               = "iam_for_lambda"
-  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+resource "aws_iam_role_policy_attachment" "attach_iam_policy_to_iam_role" {
+  role        = aws_iam_role.lambda_role.name
+  policy_arn  = aws_iam_policy.iam_policy_for_lambda.arn
 }
