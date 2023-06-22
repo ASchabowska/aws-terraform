@@ -6,7 +6,7 @@ module "secrets-manager" {
     secret-3 = {
       description             = "My secret 1"
       recovery_window_in_days = 7
-      secret_string           = "This is an example"
+      secret_string           = "I am a DevOops engineer"
     }
   }
 
