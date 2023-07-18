@@ -14,17 +14,10 @@ def lambda_handler(event, context):
         region_name=region_name
     )
 
-    try:
-        secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
-    except ClientError as errot:
-        print(error)
-    else:
-        if 'SecretString' in secret_value_response:
-            secret = json.loads(secret_value_response['SecretString'])
-            return secret
-        else:
-            decoded_binary_secret = base64.b64decode(secret_value_response['SecretBinary'])
-            return decoded_binary_secret
+    get_secret_value_response = client.get_secret_value(
+        SecretId=secret_name
+    )
+    print(get_secret_value_response)
     
+    secret = get_secret_value_response['SecretString']
+    print(secret)
