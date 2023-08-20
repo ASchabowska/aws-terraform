@@ -15,6 +15,11 @@ resource "aws_iam_role" "sm_lambda_role" {
   ]
 }
 EOF
+managed_policy_arns = [
+    aws_iam_policy.iam_policy_for_sm_lambda.arn,
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  ]
 }
 
 # IAM policy for logging from a lambda
@@ -42,4 +47,17 @@ EOF
 resource "aws_iam_role_policy_attachment" "attach_iam_policy_to_sm_lambda_role" {
   role        = aws_iam_role.sm_lambda_role.name
   policy_arn  = aws_iam_policy.iam_policy_for_sm_lambda.arn
+}
+
+resource "aws_security_group" "vpc_sm_lambda" {
+  name        = "sm-lambda-sg"
+  description = "Allow outbound traffic for sm-lambda"
+  vpc_id      = var.vpc_id
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
 }
