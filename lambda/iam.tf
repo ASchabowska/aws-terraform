@@ -15,6 +15,11 @@ resource "aws_iam_role" "lambda_role" {
   ]
 }
 EOF
+managed_policy_arns = [
+    aws_iam_policy.iam_policy_for_lambda.arn,
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  ]
 }
 
 # IAM policy for logging from a lambda
@@ -31,9 +36,10 @@ resource "aws_iam_policy" "iam_policy_for_lambda" {
       "Action": [
         "logs:CreateLogGroup",
         "logs:CreateLogStream",
-        "logs:PutLogEvents"
+        "logs:PutLogEvents",
+        "secretsmanager:GetSecretValue"
       ],
-      "Resource": "arn:aws:logs:*:*:*",
+      "Resource": "*",
       "Effect": "Allow"
     }
   ]
@@ -44,4 +50,18 @@ EOF
 resource "aws_iam_role_policy_attachment" "attach_iam_policy_to_iam_role" {
   role        = aws_iam_role.lambda_role.name
   policy_arn  = aws_iam_policy.iam_policy_for_lambda.arn
+}
+
+
+resource "aws_security_group" "vpc_lambda" {
+  name        = "lambda-sg"
+  description = "Allow outbound traffic for lambda"
+  vpc_id      = var.vpc_id
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
 }
